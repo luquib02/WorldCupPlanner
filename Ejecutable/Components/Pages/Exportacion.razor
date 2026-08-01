@@ -1,0 +1,181 @@
+﻿@page "/exportacion"
+@rendermode InteractiveServer
+@inject IExportacionServicio ExportacionServicio
+@inject IServicioSesion ServicioSesion
+@inject NavigationManager Navigation
+@inject IJSRuntime JS
+@using Sistema
+@using Sistema.Interfaces
+@using Dominio
+
+<PageTitle>Exportación</PageTitle>
+
+@if (!paginaCargada)
+{
+    <div class="d-flex justify-content-center mt-5">
+        <div class="spinner-border" role="status"></div>
+    </div>
+}
+else
+{
+    <div class="container mt-4">
+        <h3>Exportación</h3>
+
+        @if (!string.IsNullOrEmpty(mensajeError))
+        {
+            <div class="alert alert-danger alert-dismissible">
+                @mensajeError
+                <button type="button" class="btn-close" @onclick="@(() => mensajeError = string.Empty)"></button>
+            </div>
+        }
+
+        @if (!string.IsNullOrEmpty(mensajeExito))
+        {
+            <div class="alert alert-success alert-dismissible">
+                @mensajeExito
+                <button type="button" class="btn-close" @onclick="@(() => mensajeExito = string.Empty)"></button>
+            </div>
+        }
+
+        <div class="card mb-4">
+            <div class="card-header">
+                <strong>Exportar Log de Auditoría</strong>
+            </div>
+            <div class="card-body">
+                <div class="row g-3">
+                    <div class="col-md-4">
+                        <label class="form-label">Desde *</label>
+                        <input type="date" class="form-control" @bind="formDesde" />
+                    </div>
+                    <div class="col-md-4">
+                        <label class="form-label">Hasta *</label>
+                        <input type="date" class="form-control" @bind="formHasta" />
+                    </div>
+                </div>
+                <div class="mt-3">
+                    <button class="btn btn-outline-primary me-2"
+                            @onclick="DescargarLogsCsv">
+                        Descargar CSV
+                    </button>
+                    <button class="btn btn-outline-success"
+                            @onclick="DescargarLogsXlsx">
+                        Descargar XLSX
+                    </button>
+                </div>
+            </div>
+        </div>
+
+        <div class="card">
+            <div class="card-header">
+                <strong>Exportar Fixture</strong>
+            </div>
+            <div class="card-body">
+                <p class="text-muted">Exporta todos los partidos del fixture actual.</p>
+                <div class="mt-2">
+                    <button class="btn btn-outline-primary me-2"
+                            @onclick="DescargarFixtureCsv">
+                        Descargar CSV
+                    </button>
+                    <button class="btn btn-outline-success"
+                            @onclick="DescargarFixtureXlsx">
+                        Descargar XLSX
+                    </button>
+                </div>
+            </div>
+        </div>
+    </div>
+}
+
+@code {
+    private bool paginaCargada;
+    private string mensajeError = string.Empty;
+    private string mensajeExito = string.Empty;
+    private DateTime formDesde = DateTime.Today.AddMonths(-1);
+    private DateTime formHasta = DateTime.Today;
+    private string usuarioEmail = string.Empty;
+
+    protected override void OnInitialized()
+    {
+        if (!ServicioSesion.EstaLogueado)
+        {
+            Navigation.NavigateTo("/login", replace: true);
+            return;
+        }
+
+        bool esAdmin = ServicioSesion.ObtenerUsuarioActual()
+            .Roles.Contains(RolDeUsuario.AdministradorDelSistema);
+        bool esPeriodista = ServicioSesion.ObtenerUsuarioActual()
+            .Roles.Contains(RolDeUsuario.Periodista);
+
+        if (!esAdmin && !esPeriodista)
+        {
+            Navigation.NavigateTo("/", replace: true);
+            return;
+        }
+
+        usuarioEmail = ServicioSesion.ObtenerUsuarioActual().CorreoElectronico;
+        paginaCargada = true;
+    }
+
+    private async Task DescargarLogsCsv()
+    {
+        try
+        {
+            byte[] bytes = ExportacionServicio.ExportarLogsCsv(formDesde, formHasta, usuarioEmail);
+            string base64 = Convert.ToBase64String(bytes);
+            await JS.InvokeVoidAsync("descargarArchivo", 
+                $"logs_{formDesde:yyyyMMdd}_{formHasta:yyyyMMdd}.csv", base64);
+            mensajeExito = "Logs exportados correctamente.";
+        }
+        catch (Exception ex)
+        {
+            mensajeError = ex.Message;
+        }
+    }
+
+    private async Task DescargarLogsXlsx()
+    {
+        try
+        {
+            byte[] bytes = ExportacionServicio.ExportarLogsXlsx(formDesde, formHasta, usuarioEmail);
+            string base64 = Convert.ToBase64String(bytes);
+            await JS.InvokeVoidAsync("descargarArchivo",
+                $"logs_{formDesde:yyyyMMdd}_{formHasta:yyyyMMdd}.xlsx", base64);
+            mensajeExito = "Logs exportados correctamente.";
+        }
+        catch (Exception ex)
+        {
+            mensajeError = ex.Message;
+        }
+    }
+
+    private async Task DescargarFixtureCsv()
+    {
+        try
+        {
+            byte[] bytes = ExportacionServicio.ExportarFixtureCsv(usuarioEmail);
+            string base64 = Convert.ToBase64String(bytes);
+            await JS.InvokeVoidAsync("descargarArchivo", "fixture.csv", base64);
+            mensajeExito = "Fixture exportado correctamente.";
+        }
+        catch (Exception ex)
+        {
+            mensajeError = ex.Message;
+        }
+    }
+
+    private async Task DescargarFixtureXlsx()
+    {
+        try
+        {
+            byte[] bytes = ExportacionServicio.ExportarFixtureXlsx(usuarioEmail);
+            string base64 = Convert.ToBase64String(bytes);
+            await JS.InvokeVoidAsync("descargarArchivo", "fixture.xlsx", base64);
+            mensajeExito = "Fixture exportado correctamente.";
+        }
+        catch (Exception ex)
+        {
+            mensajeError = ex.Message;
+        }
+    }
+}

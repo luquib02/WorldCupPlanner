@@ -1,0 +1,30 @@
+@inherits LayoutComponentBase
+@using Sistema.Interfaces
+@inject IServicioSesion ServicioSesion
+
+<div class="page">
+    @if (ServicioSesion.EstaLogueado)
+    {
+        <div class="sidebar">
+            <NavMenu/>
+        </div>
+    }
+    
+    <main>
+        <div class="top-row px-4">
+            <span></span>
+            <span class="app-title">World Cup Planner</span>
+            <a href="https://learn.microsoft.com/aspnet/core/" target="_blank">About</a>
+        </div>
+
+        <article class="content px-4">
+            @Body
+        </article>
+    </main>
+</div>
+
+<div id="blazor-error-ui">
+    Ocurrió un error inesperado. Por favor, recargá la página.
+    <a href="" class="reload">Recargar</a>
+    <a class="dismiss">✕</a>
+</div>

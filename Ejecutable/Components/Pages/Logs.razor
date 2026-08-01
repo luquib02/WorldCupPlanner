@@ -1,0 +1,93 @@
+﻿@page "/logs"
+@rendermode InteractiveServer
+@inject LogServicio LogServicio
+@inject IServicioSesion ServicioSesion
+@inject IServicioRoles ServicioRoles
+@inject NavigationManager Navigation
+@using Sistema
+@using Sistema.Interfaces
+@using Sistema.DTOs
+
+<PageTitle>Logs</PageTitle>
+
+@if (!paginaCargada)
+{
+    <div class="d-flex justify-content-center mt-5">
+        <div class="spinner-border" role="status"></div>
+    </div>
+}
+else
+{
+    <div class="container mt-4">
+        <div class="d-flex justify-content-between align-items-center mb-3">
+            <h3>Log de auditoría</h3>
+            <span class="badge bg-secondary fs-6">@logs.Count registros</span>
+        </div>
+
+        @if (!logs.Any())
+        {
+            <div class="alert alert-info">No hay registros de auditoría.</div>
+        }
+        else
+        {
+            <table class="table table-striped table-hover table-sm">
+                <thead>
+                    <tr>
+                        <th>Timestamp</th>
+                        <th>Usuario</th>
+                        <th>Acción</th>
+                        <th>Detalle</th>
+                    </tr>
+                </thead>
+                <tbody>
+                    @foreach (var log in logs.OrderByDescending(l => l.Timestamp))
+                    {
+                        <tr>
+                            <td class="text-muted small">
+                                @log.Timestamp.ToString("dd/MM/yyyy HH:mm:ss")
+                            </td>
+                            <td>@log.UsuarioEmail</td>
+                            <td>
+                                <span class="badge @BadgeColor(log.Accion)">
+                                    @log.Accion
+                                </span>
+                            </td>
+                            <td class="small">@log.Detalle</td>
+                        </tr>
+                    }
+                </tbody>
+            </table>
+        }
+    </div>
+}
+
+@code {
+    private List<LogEntryDTO> logs = new();
+    private bool paginaCargada;
+
+    protected override void OnInitialized()
+    {
+        if (!ServicioSesion.EstaLogueado)
+        {
+            Navigation.NavigateTo("/login", replace: true);
+            return;
+        }
+        if (!ServicioRoles.EsAdmin())
+        {
+            Navigation.NavigateTo("/", replace: true);
+            return;
+        }
+        logs = LogServicio.ListarLogs();
+        paginaCargada = true;
+    }
+
+    private static string BadgeColor(string accion) => accion switch
+    {
+        var a when a.StartsWith("Alta")         => "bg-success",
+        var a when a.StartsWith("Edicion")      => "bg-warning text-dark",
+        var a when a.StartsWith("Eliminacion")  => "bg-danger",
+        var a when a.StartsWith("Generacion")   => "bg-primary",
+        var a when a.StartsWith("Modificacion") => "bg-warning text-dark",
+        _                                        => "bg-secondary"
+    };
+}

@@ -1,0 +1,237 @@
+﻿@page "/perfil"
+@rendermode InteractiveServer
+@using Sistema
+@using Sistema.Interfaces
+@using Dominio
+@using Sistema.DTOs
+@inject IServicioUsuario ServicioUsuario
+@inject IServicioSesion ServicioSesion
+@inject NavigationManager Navigation
+
+<PageTitle>Mi Perfil - World Cup Planner</PageTitle>
+
+@if (usuario != null)
+{
+    <div class="container mt-5">
+        <div class="row">
+            <div class="col-md-8 mx-auto">
+                <div class="card">
+                    <div class="card-header bg-primary text-white">
+                        <h5 class="mb-0">Mi Perfil</h5>
+                    </div>
+                    <div class="card-body">
+                        @if (!string.IsNullOrEmpty(mensajeError))
+                        {
+                            <div class="alert alert-danger alert-dismissible fade show">
+                                @mensajeError
+                                <button type="button" class="btn-close" @onclick="@(() => mensajeError = "")"></button>
+                            </div>
+                        }
+
+                        @if (!string.IsNullOrEmpty(mensajeExito))
+                        {
+                            <div class="alert alert-success alert-dismissible fade show">
+                                @mensajeExito
+                                <button type="button" class="btn-close" @onclick="@(() => mensajeExito = "")"></button>
+                            </div>
+                        }
+
+                        <div class="mb-3">
+                            <label class="form-label">Nombre</label>
+                            <input type="text" class="form-control" @bind="usuario.Nombre" />
+                        </div>
+
+                        <div class="mb-3">
+                            <label class="form-label">Apellido</label>
+                            <input type="text" class="form-control" @bind="usuario.Apellido" />
+                        </div>
+
+                        <div class="mb-3">
+                            <label class="form-label">Email</label>
+                            <input type="email" class="form-control" @bind="usuario.CorreoElectronico" />
+                        </div>
+
+                        <div class="mb-3">
+                            <label class="form-label">Fecha de Nacimiento</label>
+                            <input type="text"
+                                   class="form-control @(string.IsNullOrEmpty(fechaNacimientoError) ? "" : "is-invalid")"
+                                   value="@fechaNacimientoTexto"
+                                   placeholder="MM-DD-YYYY"
+                                   maxlength="10"
+                                   inputmode="numeric"
+                                   @oninput="OnFechaTextoInput" />
+                            @if (!string.IsNullOrEmpty(fechaNacimientoError))
+                            {
+                                <div class="invalid-feedback d-block">@fechaNacimientoError</div>
+                            }
+                        </div>
+
+                        <div class="mb-3">
+                            <label class="form-label">Roles</label>
+                            <div>
+                                @if (usuario.Roles.Count > 0)
+                                {
+                                    @foreach (var rol in usuario.Roles)
+                                    {
+                                        <span class="badge bg-info">@rol</span>
+                                    }
+                                }
+                                else
+                                {
+                                    <span class="badge bg-secondary">Sin roles</span>
+                                }
+                            </div>
+                        </div>
+
+                        <div class="d-flex gap-2 mb-4">
+                            <button class="btn btn-primary" @onclick="GuardarDatos" disabled="@procesando">
+                                @if (procesando) { <span class="spinner-border spinner-border-sm me-2"></span> }
+                                Guardar Cambios
+                            </button>
+                        </div>
+
+                        <hr />
+
+                        <h6 class="mb-3">Cambiar Contraseña</h6>
+
+                        <div class="mb-3">
+                            <label class="form-label">Contraseña Actual</label>
+                            <input type="password" class="form-control" @bind="contraseniaActual" />
+                        </div>
+
+                        <div class="mb-3">
+                            <label class="form-label">Contraseña Nueva</label>
+                            <input type="password" class="form-control" @bind="contraseniaNueva" />
+                        </div>
+
+                        <div class="d-flex gap-2">
+                            <button class="btn btn-warning" @onclick="CambiarContrasenia" 
+                                    disabled="@(procesando || string.IsNullOrWhiteSpace(contraseniaActual) || string.IsNullOrWhiteSpace(contraseniaNueva))">
+                                @if (procesando) { <span class="spinner-border spinner-border-sm me-2"></span> }
+                                Cambiar Contraseña
+                            </button>
+
+                            <button class="btn btn-secondary" @onclick="@(() => Navigation.NavigateTo("/"))">
+                                Volver
+                            </button>
+                        </div>
+                    </div>
+                </div>
+            </div>
+        </div>
+    </div>
+}
+
+@code {
+    private UsuarioDTO? usuario;
+    private string contraseniaActual = "";
+    private string contraseniaNueva = "";
+    private bool procesando;
+    private string mensajeError = "";
+    private string mensajeExito = "";
+    private string fechaNacimientoTexto = "";
+    private string fechaNacimientoError = "";
+
+    protected override void OnInitialized()
+    {
+        try
+        {
+            if (!ServicioSesion.EstaLogueado)
+            {
+                Navigation.NavigateTo("/login", replace: true);
+                return;
+            }
+            usuario = UsuarioDTO.convertirAUsuarioDTO(ServicioSesion.ObtenerUsuarioActual());
+            fechaNacimientoTexto = usuario?.FechaNacimiento.ToString("MM-dd-yyyy") ?? "";
+            fechaNacimientoError = "";
+        }
+        catch
+        {
+            Navigation.NavigateTo("/login", replace: true);
+        }
+    }
+
+    private void OnFechaTextoInput(ChangeEventArgs e)
+    {
+        fechaNacimientoTexto = e.Value?.ToString() ?? "";
+        if (string.IsNullOrWhiteSpace(fechaNacimientoTexto))
+        {
+            fechaNacimientoError = "La fecha de nacimiento es requerida.";
+            return;
+        }
+
+        if (DateOnly.TryParseExact(fechaNacimientoTexto, "MM-dd-yyyy", System.Globalization.CultureInfo.InvariantCulture, System.Globalization.DateTimeStyles.None, out var fecha))
+        {
+            fechaNacimientoError = "";
+            fechaNacimientoTexto = fecha.ToString("MM-dd-yyyy");
+            if (usuario != null)
+            {
+                usuario.FechaNacimiento = fecha;
+            }
+        }
+        else
+        {
+            fechaNacimientoError = "Fecha inválida. Usa MM-DD-AAAA.";
+        }
+    }
+
+    private void GuardarDatos()
+    {
+        try
+        {
+            if (usuario == null) return;
+            if (!DateOnly.TryParseExact(fechaNacimientoTexto, "MM-dd-yyyy", System.Globalization.CultureInfo.InvariantCulture, System.Globalization.DateTimeStyles.None, out var fechaValida))
+            {
+                fechaNacimientoError = "Fecha inválida. Usa MM-DD-AAAA.";
+                mensajeError = fechaNacimientoError;
+                return;
+            }
+
+            usuario.FechaNacimiento = fechaValida;
+            fechaNacimientoTexto = fechaValida.ToString("MM-dd-yyyy");
+            fechaNacimientoError = "";
+            procesando = true;
+            mensajeError = "";
+            if (usuario != null)
+            {
+                ServicioUsuario.ModificarUsuario(usuario.Id, usuario);
+            }
+            mensajeExito = "Perfil actualizado, volvé a iniciar sesión para que se reflejen todos los cambios.";
+        }
+        catch (Exception ex)
+        {
+            mensajeError = ex.Message;
+        }
+        finally
+        {
+            procesando = false;
+        }
+    }
+
+    private void CambiarContrasenia()
+    {
+        try
+        {
+            if (string.IsNullOrWhiteSpace(contraseniaActual) || string.IsNullOrWhiteSpace(contraseniaNueva))
+            {
+                mensajeError = "Ambas contraseñas son requeridas";
+                return;
+            }
+
+            procesando = true;
+            mensajeError = "";
+            ServicioUsuario.ModificarContrasenia(contraseniaActual, contraseniaNueva);
+            mensajeExito = "Contraseña actualizada";
+            contraseniaActual = "";
+            contraseniaNueva = "";
+        }
+        catch (Exception ex)
+        {
+            mensajeError = ex.Message;
+        }
+        finally
+        {
+            procesando = false;
+        }
+    }
+}

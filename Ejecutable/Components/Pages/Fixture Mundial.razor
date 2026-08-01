@@ -1,0 +1,375 @@
+﻿@page "/fixture"
+@rendermode InteractiveServer
+@inject FixtureServicio FixtureServicio
+@inject EstadioServicio EstadioServicio
+@inject EquipoServicio EquipoServicio
+@inject IServicioSesion ServicioSesion
+@inject IServicioRoles ServicioRoles
+@inject NavigationManager Navigation
+@using Sistema
+@using Sistema.Interfaces
+@using Dominio
+@using Dominio.Simulacion
+@using Sistema.DTOs
+
+<PageTitle>Fixture</PageTitle>
+
+@if (!paginaCargada)
+{
+    <div class="d-flex justify-content-center mt-5">
+        <div class="spinner-border" role="status"></div>
+    </div>
+}
+else
+{
+    <div class="container mt-4">
+        <h3>Fixture — Fase de Grupos</h3>
+
+        @if (!string.IsNullOrEmpty(mensajeError))
+        {
+            <div class="alert alert-danger alert-dismissible">
+                @mensajeError
+                <button type="button" class="btn-close"
+                        @onclick="@(() => mensajeError = string.Empty)">
+                </button>
+            </div>
+        }
+
+        @if (!string.IsNullOrEmpty(mensajeExito))
+        {
+            <div class="alert alert-success alert-dismissible">
+                @mensajeExito
+                <button type="button" class="btn-close"
+                        @onclick="@(() => mensajeExito = string.Empty)">
+                </button>
+            </div>
+        }
+
+        @if (fixture == null)
+        {
+            <div class="card border-primary mt-3">
+                <div class="card-body">
+                    <h5>No hay fixture generado</h5>
+                    @if (!esPeriodista)
+                    {
+                        <p class="text-muted">
+                            Necesitás exactamente <strong>48 equipos</strong> y al menos
+                            <strong>4 estadios</strong>.<br />
+                            Actualmente: <strong>@cantEquipos equipos</strong> y
+                            <strong>@cantEstadios estadios</strong>.
+                        </p>
+                        <div class="row g-2 mb-3">
+                            <div class="col-md-3">
+                                <label class="form-label">SemillaFixture</label>
+                                <input type="number" class="form-control" @bind="formSemilla" />
+                            </div>
+                            <div class="col-md-3">
+                                <label class="form-label">Fecha inicio</label>
+                                <input type="date" class="form-control"
+                                       value="@formFechaInicio.ToString("yyyy-MM-dd")"
+                                       @onchange="@(e => ActualizarFecha(e.Value?.ToString()))" />
+                            </div>
+                            <div class="col-md-3">
+                                <label class="form-label">Motor de simulación</label>
+                                <select class="form-select" @bind="formMotor">
+                                    @foreach (string nombreMotor in motoresDisponibles)
+                                    {
+                                        <option value="@nombreMotor">@nombreMotor</option>
+                                    }
+                                </select>
+                            </div>
+                        </div>
+                        <button class="btn btn-primary" disabled="@_generandoFixture" @onclick="GenerarFixture">
+                            @if (_generandoFixture)
+                            {
+                                <span class="spinner-border spinner-border-sm me-1" role="status"></span>
+                                <span>Generando...</span>
+                            }
+                            else
+                            {
+                                <span>Generar fixture</span>
+                            }
+                        </button>
+                    }
+                </div>
+            </div>
+        }
+        else
+        {
+            <div class="d-flex justify-content-between align-items-center mb-3">
+                <span class="badge bg-info text-dark">
+                    Motor de simulación: @fixture.NombreMotorSimulacion
+                </span>
+                @if (!esPeriodista && !EstaFaseGruposCompleta())
+                {
+                    <button class="btn btn-outline-secondary btn-sm"
+                            disabled="@_simulandoTodos"
+                            @onclick="SimularTodosLosGrupos">
+                        @if (_simulandoTodos)
+                        {
+                            <span class="spinner-border spinner-border-sm me-1" role="status"></span>
+                            <span>Simulando...</span>
+                        }
+                        else
+                        {
+                            <span>Simular toda la fase de grupos</span>
+                        }
+                    </button>
+                }
+            </div>
+
+            <div class="row row-cols-1 row-cols-md-3 g-3">
+                @foreach (var grupo in fixture.Grupos)
+                {
+                    <div class="col">
+                        <div class="card h-100">
+                            <div class="card-header d-flex justify-content-between">
+                                <strong>Grupo @grupo.Etiqueta</strong>
+                                <span class="badge bg-secondary">
+                                    @grupo.Jornadas.SelectMany(j => j.Partidos).Count(p => p.EstaJugado)
+                                    / @grupo.Jornadas.SelectMany(j => j.Partidos).Count() jugados
+                                </span>
+                            </div>
+                            <div class="card-body p-2">
+                                <table class="table table-sm mb-2">
+                                    <thead>
+                                        <tr>
+                                            <th>Equipo</th>
+                                            <th>Pts</th>
+                                            <th>DG</th>
+                                        </tr>
+                                    </thead>
+                                    <tbody>
+                                        @foreach (var pos in ObtenerTabla(grupo))
+                                        {
+                                            <tr>
+                                                <td>@pos.Equipo.Nombre</td>
+                                                <td class="fw-bold">@pos.Puntos</td>
+                                                <td>@pos.DiferenciaGoles</td>
+                                            </tr>
+                                        }
+                                    </tbody>
+                                </table>
+
+                                <button class="btn btn-sm btn-outline-primary w-100 mb-1"
+                                        @onclick="@(() => ToggleGrupo(grupo.Etiqueta))">
+                                    @(grupoExpandido == grupo.Etiqueta ? "Ocultar" : "Ver partidos")
+                                </button>
+
+                                @if (grupoExpandido == grupo.Etiqueta)
+                                {
+                                    @foreach (var jornada in grupo.Jornadas)
+                                    {
+                                        <div class="mt-1">
+                                            <small class="text-muted fw-bold">
+                                                J@jornada.Numero —
+                                                @jornada.Fecha.ToString("dd/MM")
+                                            </small>
+                                            @foreach (var partido in jornada.Partidos)
+                                            {
+                                                <div class="d-flex justify-content-between
+                                                            border rounded px-2 py-1 mt-1 small">
+                                                    <span class="@(EsGanador(partido,true) ? "fw-bold" : "")">
+                                                        @partido.EquipoLocal!.Nombre
+                                                    </span>
+                                                    <span class="fw-bold">
+                                                        @if (partido.EstaJugado)
+                                                        {
+                                                            @($"{partido.GolesLocal}-{partido.GolesVisitante}")
+                                                        }
+                                                        else
+                                                        {
+                                                            @("vs")
+                                                        }
+                                                    </span>
+                                                    <span class="@(EsGanador(partido,false) ? "fw-bold" : "")">
+                                                        @partido.EquipoVisitante!.Nombre
+                                                    </span>
+                                                </div>
+                                            }
+                                        </div>
+                                    }
+
+                                    @if (!esPeriodista && !EstaGrupoCompleto(grupo))
+                                    {
+                                        <button class="btn btn-sm btn-outline-warning w-100 mt-1"
+                                                disabled="@_gruposSimulando.Contains(grupo.Etiqueta)"
+                                                @onclick="@(() => SimularGrupo(grupo))">
+                                            @if (_gruposSimulando.Contains(grupo.Etiqueta))
+                                            {
+                                                <span class="spinner-border spinner-border-sm me-1" role="status"></span>
+                                                <span>Simulando...</span>
+                                            }
+                                            else
+                                            {
+                                                <span>Simular grupo @grupo.Etiqueta</span>
+                                            }
+                                        </button>
+                                    }
+                                }
+                            </div>
+                        </div>
+                    </div>
+                }
+            </div>
+        }
+    </div>
+}
+
+@code {
+    private FixtureDTO? fixture;
+    private int cantEquipos;
+    private int cantEstadios;
+    private bool paginaCargada;
+    private bool esPeriodista;
+    private string mensajeError = string.Empty;
+    private string mensajeExito = string.Empty;
+    private string? grupoExpandido;
+    private int formSemilla = 42;
+    private DateTime formFechaInicio = new DateTime(2026, 6, 1);
+    private string formMotor = NombresMotores.Probabilistico;
+    private List<string> motoresDisponibles = new();
+    private bool _generandoFixture = false;
+    private bool _simulandoTodos = false;
+    private HashSet<string> _gruposSimulando = new();
+
+    protected override void OnInitialized()
+    {
+        if (!ServicioSesion.EstaLogueado)
+        {
+            Navigation.NavigateTo("/login", replace: true);
+            return;
+        }
+        bool esAdmin = ServicioRoles.EsAdmin();
+        bool esEditor = ServicioRoles.EsEditor();
+        esPeriodista = ServicioRoles.TienePermiso("Periodista");
+        if (!esAdmin && !esEditor && !esPeriodista)
+        {
+            Navigation.NavigateTo("/", replace: true);
+            return;
+        }
+        CargarDatos();
+        paginaCargada = true;
+    }
+
+    private void CargarDatos()
+    {
+        try
+        {
+            fixture = FixtureServicio.ObtenerFixture();
+        }
+        catch (Dominio.Excepciones.DominioException)
+        {
+            fixture = null;
+        }
+        catch (Exception)
+        {
+            fixture = null;
+            mensajeError = "No se pudieron cargar los datos del fixture. Intentá recargar la página.";
+            return;
+        }
+        try
+        {
+            cantEquipos = EquipoServicio.ObtenerTodos().Count;
+            cantEstadios = EstadioServicio.ListarTodos().Count;
+            motoresDisponibles = FixtureServicio.ObtenerMotoresDisponibles();
+        }
+        catch (Exception)
+        {
+            mensajeError = "No se pudieron cargar los datos. Intentá recargar la página.";
+        }
+    }
+
+    private async Task GenerarFixture()
+    {
+        _generandoFixture = true;
+        StateHasChanged();
+        await Task.Yield();
+        try
+        {
+            string email = ServicioSesion.ObtenerUsuarioActual().CorreoElectronico;
+            ConfiguracionTorneo config = new ConfiguracionTorneo(
+                formSemilla, 0, 0, 0, formFechaInicio, 3, 3);
+            fixture = FixtureServicio.GenerarFixture(config, email, formMotor);
+            mensajeExito = "Fixture generado correctamente.";
+        }
+        catch (Exception ex)
+        {
+            mensajeError = ex.Message;
+        }
+        finally
+        {
+            _generandoFixture = false;
+        }
+    }
+
+    private async Task SimularGrupo(GrupoDTO grupo)
+    {
+        string etiqueta = grupo.Etiqueta;
+        _gruposSimulando.Add(etiqueta);
+        StateHasChanged();
+        await Task.Yield();
+        try
+        {
+            ConfiguracionTorneo config = ConfiguracionTorneo.PorDefecto();
+            string email = ServicioSesion.ObtenerUsuarioActual().CorreoElectronico;
+            fixture = FixtureServicio.SimularGrupo(etiqueta, config, email);
+            mensajeExito = $"Grupo {etiqueta} simulado.";
+        }
+        catch (Exception ex)
+        {
+            mensajeError = ex.Message;
+        }
+        finally
+        {
+            _gruposSimulando.Remove(etiqueta);
+        }
+    }
+
+    private async Task SimularTodosLosGrupos()
+    {
+        _simulandoTodos = true;
+        StateHasChanged();
+        await Task.Yield();
+        try
+        {
+            ConfiguracionTorneo config = ConfiguracionTorneo.PorDefecto();
+            string email = ServicioSesion.ObtenerUsuarioActual().CorreoElectronico;
+            fixture = FixtureServicio.SimularFaseDeGrupos(config, email);
+            mensajeExito = "Fase de grupos simulada completa.";
+        }
+        catch (Exception ex)
+        {
+            mensajeError = ex.Message;
+        }
+        finally
+        {
+            _simulandoTodos = false;
+        }
+    }
+
+    private List<PosicionEquipoDTO> ObtenerTabla(GrupoDTO grupo) =>
+        FixtureServicio.ObtenerTablaPosiciones(grupo.Etiqueta);
+
+    private void ActualizarFecha(string? valor)
+    {
+        if (DateTime.TryParse(valor, out DateTime f))
+            formFechaInicio = f;
+    }
+
+    private void ToggleGrupo(string etiqueta) =>
+        grupoExpandido = grupoExpandido == etiqueta ? null : etiqueta;
+
+    private bool EsGanador(PartidoDTO p, bool esLocal) =>
+        p.EstaJugado && (esLocal
+            ? p.GolesLocal > p.GolesVisitante
+            : p.GolesVisitante > p.GolesLocal);
+
+    private bool TienePermiso(string roleName) => ServicioRoles.TienePermiso(roleName);
+
+    private bool EstaGrupoCompleto(GrupoDTO grupo) =>
+        grupo.Jornadas.All(j => j.Partidos.All(p => p.EstaJugado));
+
+    private bool EstaFaseGruposCompleta() =>
+        fixture != null && fixture.Grupos.All(g => g.Jornadas.All(j => j.Partidos.All(p => p.EstaJugado)));
+}

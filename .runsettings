@@ -1,0 +1,38 @@
+<?xml version="1.0" encoding="utf-8"?>
+<RunSettings>
+  <RunConfiguration>
+    <EnvironmentVariables>
+      <ASPNETCORE_ENVIRONMENT>Testing</ASPNETCORE_ENVIRONMENT>
+    </EnvironmentVariables>
+  </RunConfiguration>
+  <DataCollectionRunSettings>
+    <DataCollectors>
+      <!-- Recoleccion de cobertura con dotnet-coverage (Microsoft Code Coverage). -->
+      <DataCollector friendlyName="Code Coverage">
+        <Configuration>
+          <CodeCoverage>
+            <ModulePaths>
+              <Exclude>
+                <!-- Excluir los assemblies de test (coverlet lo hacia por defecto). -->
+                <ModulePath>.*\.Tests\.dll$</ModulePath>
+              </Exclude>
+            </ModulePaths>
+            <Sources>
+              <Exclude>
+                <Source>.*Migrations[\\/].*\.cs$</Source>
+                <Source>.*[\\/]Program\.cs$</Source>
+                <Source>.*DbContext\.cs$</Source>
+                <Source>.*Context\.cs$</Source>
+              </Exclude>
+            </Sources>
+            <Attributes>
+              <Exclude>
+                <Attribute>^System\.CodeDom\.Compiler\.GeneratedCodeAttribute$</Attribute>
+              </Exclude>
+            </Attributes>
+          </CodeCoverage>
+        </Configuration>
+      </DataCollector>
+    </DataCollectors>
+  </DataCollectionRunSettings>
+</RunSettings>

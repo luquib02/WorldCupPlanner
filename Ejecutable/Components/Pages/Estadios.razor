@@ -1,0 +1,248 @@
+﻿@page "/estadios"
+@rendermode InteractiveServer
+@inject EstadioServicio EstadioServicio
+@inject IServicioSesion ServicioSesion
+@inject Sistema.Interfaces.IServicioRoles ServicioRoles
+@inject IServicioUsuario ServicioUsuario
+@inject NavigationManager Navigation
+@using Sistema
+@using Sistema.Interfaces
+@using Dominio
+@using Sistema.DTOs
+
+<PageTitle>Estadios</PageTitle>
+
+@if (!paginaCargada)
+{
+    <div class="d-flex justify-content-center mt-5">
+        <div class="spinner-border" role="status"></div>
+    </div>
+}
+else
+{
+    <div class="container mt-4">
+
+        <div class="d-flex justify-content-between align-items-center mb-3">
+            <h3>Estadios</h3>
+            <button class="btn btn-primary" @onclick="AbrirFormularioAlta">
+                + Nuevo estadio
+            </button>
+        </div>
+
+        @if (!string.IsNullOrEmpty(mensajeError))
+        {
+            <div class="alert alert-danger alert-dismissible">
+                @mensajeError
+                <button type="button" class="btn-close"
+                        @onclick="@(() => mensajeError = string.Empty)">
+                </button>
+            </div>
+        }
+
+        @if (!string.IsNullOrEmpty(mensajeExito))
+        {
+            <div class="alert alert-success alert-dismissible">
+                @mensajeExito
+                <button type="button" class="btn-close"
+                        @onclick="@(() => mensajeExito = string.Empty)">
+                </button>
+            </div>
+        }
+
+        <table class="table table-striped table-hover">
+            <thead>
+                <tr>
+                    <th>Nombre</th>
+                    <th>Ciudad</th>
+                    <th>Capacidad</th>
+                    <th>Descripción</th>
+                    <th>Acciones</th>
+                </tr>
+            </thead>
+            <tbody>
+                @foreach (var estadio in estadios)
+                {
+                    <tr>
+                        <td>@estadio.Nombre</td>
+                        <td>@estadio.Ciudad</td>
+                        <td>@estadio.Capacidad.ToString("N0")</td>
+                        <td>@(estadio.Descripcion ?? "—")</td>
+                        <td>
+                            <button class="btn btn-sm btn-outline-secondary me-1"
+                                    @onclick="@(() => AbrirFormularioEdicion(estadio))">
+                                Editar
+                            </button>
+                            <button class="btn btn-sm btn-outline-danger"
+                                    @onclick="@(() => Eliminar(estadio.Id))">
+                                Eliminar
+                            </button>
+                        </td>
+                    </tr>
+                }
+                @if (!estadios.Any())
+                {
+                    <tr>
+                        <td colspan="5" class="text-center text-muted">
+                            No hay estadios cargados.
+                        </td>
+                    </tr>
+                }
+            </tbody>
+        </table>
+
+        @if (mostrarFormulario)
+        {
+            <div class="card mt-4">
+                <div class="card-header">
+                    <strong>@(esNuevo ? "Nuevo estadio" : "Editar estadio")</strong>
+                </div>
+                <div class="card-body">
+                    <div class="row g-3">
+                        <div class="col-md-6">
+                            <label class="form-label">Nombre *</label>
+                            <input class="form-control"
+                                   @bind="formNombre"
+                                   placeholder="Nombre del estadio" />
+                        </div>
+                        <div class="col-md-6">
+                            <label class="form-label">Ciudad *</label>
+                            <input class="form-control"
+                                   @bind="formCiudad"
+                                   placeholder="Ciudad" />
+                        </div>
+                        <div class="col-md-4">
+                            <label class="form-label">Capacidad * (mín. 20.000)</label>
+                            <input type="number"
+                                   class="form-control"
+                                   @bind="formCapacidad"
+                                   min="20000" />
+                        </div>
+                        <div class="col-md-8">
+                            <label class="form-label">Descripción</label>
+                            <input class="form-control"
+                                   @bind="formDescripcion"
+                                   placeholder="Opcional" />
+                        </div>
+                    </div>
+                    <div class="mt-3">
+                        <button class="btn btn-success me-2" @onclick="Guardar">
+                            Guardar
+                        </button>
+                        <button class="btn btn-secondary" @onclick="Cancelar">
+                            Cancelar
+                        </button>
+                    </div>
+                </div>
+            </div>
+        }
+
+    </div>
+}
+
+@code {
+    private List<EstadioDTO> estadios = new();
+    private bool mostrarFormulario;
+    private bool paginaCargada;
+    private bool esNuevo;
+    private int editandoId;
+    private string mensajeError = string.Empty;
+    private string mensajeExito = string.Empty;
+    private string formNombre = string.Empty;
+    private string formCiudad = string.Empty;
+    private int formCapacidad;
+    private string? formDescripcion;
+
+    protected override void OnInitialized()
+    {
+        if (!ServicioSesion.EstaLogueado)
+        {
+            Navigation.NavigateTo("/login", replace: true);
+            return;
+        }
+        if (!ServicioRoles.EsAdmin())
+        {
+            Navigation.NavigateTo("/", replace: true);
+            return;
+        }
+        CargarEstadios();
+        paginaCargada = true;
+    }
+
+    private void CargarEstadios() =>
+        estadios = EstadioServicio.ListarTodos();
+
+    private void AbrirFormularioAlta()
+    {
+        esNuevo = true;
+        editandoId = 0;
+        formNombre = string.Empty;
+        formCiudad = string.Empty;
+        formCapacidad = 20000;
+        formDescripcion = null;
+        mensajeError = string.Empty;
+        mostrarFormulario = true;
+    }
+
+    private void AbrirFormularioEdicion(EstadioDTO estadio)
+    {
+        esNuevo = false;
+        editandoId = estadio.Id;
+        formNombre = estadio.Nombre;
+        formCiudad = estadio.Ciudad;
+        formCapacidad = estadio.Capacidad;
+        formDescripcion = estadio.Descripcion;
+        mensajeError = string.Empty;
+        mostrarFormulario = true;
+    }
+
+    private void Guardar()
+    {
+        try
+        {
+            string email = ServicioSesion.ObtenerUsuarioActual().CorreoElectronico;
+            EstadioDTO estadioDTO = new EstadioDTO
+            {
+                Id = editandoId,
+                Nombre = formNombre,
+                Ciudad = formCiudad,
+                Capacidad = formCapacidad,
+                Descripcion = string.IsNullOrWhiteSpace(formDescripcion) ? null : formDescripcion
+            };
+            if (esNuevo)
+                EstadioServicio.Crear(estadioDTO, email);
+            else
+                EstadioServicio.Modificar(estadioDTO, email);
+
+            mensajeExito = esNuevo ? "Estadio creado." : "Estadio modificado.";
+            mostrarFormulario = false;
+            CargarEstadios();
+        }
+        catch (Exception ex)
+        {
+            mensajeError = ex.Message;
+        }
+    }
+
+    private void Eliminar(int id)
+    {
+        try
+        {
+            string email = ServicioSesion.ObtenerUsuarioActual().CorreoElectronico;
+            EstadioServicio.Eliminar(id, email);
+            mensajeExito = "Estadio eliminado.";
+            CargarEstadios();
+        }
+        catch (Exception ex)
+        {
+            mensajeError = ex.Message;
+        }
+    }
+
+    private void Cancelar()
+    {
+        mostrarFormulario = false;
+        mensajeError = string.Empty;
+    }
+
+    private bool TienePermiso(string roleName) => ServicioRoles.TienePermiso(roleName);
+}

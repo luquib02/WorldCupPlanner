@@ -1,0 +1,425 @@
+﻿@page "/partidos"
+
+@rendermode InteractiveServer
+@inject PartidoServicio PartidoServicio
+@inject EstadioServicio EstadioServicio
+@inject IServicioSesion ServicioSesion
+@inject Sistema.Interfaces.IServicioRoles ServicioRoles
+@inject NavigationManager Navigation
+@using Sistema
+@using Sistema.Interfaces
+@using Dominio
+@using Sistema.DTOs
+
+<PageTitle>Partidos</PageTitle>
+
+@if (!paginaCargada)
+{
+    <div class="d-flex justify-content-center mt-5">
+        <div class="spinner-border" role="status"></div>
+    </div>
+}
+else
+{
+    <div class="container mt-4">
+
+        <h3>Partidos</h3>
+
+        @if (!string.IsNullOrEmpty(mensajeError))
+        {
+            <div class="alert alert-danger alert-dismissible">
+                @mensajeError
+                <button type="button" class="btn-close"
+                        @onclick="@(() => mensajeError = string.Empty)">
+                </button>
+            </div>
+        }
+
+        @if (!string.IsNullOrEmpty(mensajeExito))
+        {
+            <div class="alert alert-success alert-dismissible">
+                @mensajeExito
+                <button type="button" class="btn-close"
+                        @onclick="@(() => mensajeExito = string.Empty)">
+                </button>
+            </div>
+        }
+
+        <div class="row g-2 mb-3">
+            <div class="col-md-3">
+                <label class="form-label">Fase</label>
+                <select class="form-select" @bind="filtroFase">
+                    <option value="">Todas las fases</option>
+                    @foreach (var fase in Enum.GetValues<FasePartido>())
+                    {
+                        <option value="@fase">@fase</option>
+                    }
+                </select>
+            </div>
+            <div class="col-md-2">
+                <label class="form-label">Grupo</label>
+                <select class="form-select" @bind="filtroGrupo">
+                    <option value="">Todos</option>
+                    @foreach (var g in gruposDisponibles)
+                    {
+                        <option value="@g">Grupo @g</option>
+                    }
+                </select>
+            </div>
+            <div class="col-md-3">
+                <label class="form-label">Estadio</label>
+                <select class="form-select" @bind="filtroEstadio">
+                    <option value="">Todos los estadios</option>
+                    @foreach (var est in estadios)
+                    {
+                        <option value="@est.Nombre">@est.Nombre</option>
+                    }
+                </select>
+            </div>
+            <div class="col-md-2 d-flex align-items-end">
+                <button class="btn btn-outline-secondary w-100" @onclick="LimpiarFiltros">
+                    Limpiar
+                </button>
+            </div>
+        </div>
+
+        @if (!partidos.Any())
+        {
+            <div class="alert alert-info">
+                No hay partidos generados. Generá el fixture primero.
+            </div>
+        }
+        else
+        {
+            <p class="text-muted small">
+                Mostrando @PartidosFiltrados.Count() de @partidos.Count partidos.
+            </p>
+
+            <table class="table table-striped table-hover table-sm">
+                <thead>
+                <tr>
+                        <th>Fase</th>
+                        <th>Grupo</th>
+                        <th>Fecha</th>
+                        <th>Local</th>
+                        <th>Resultado</th>
+                        <th>Visitante</th>
+                        <th>Estadio</th>
+                        <th>Acciones</th>
+                    </tr>
+                </thead>
+                <tbody>
+                    @foreach (var partido in PartidosFiltrados)
+                    {
+                        <tr>
+                            <td>
+                                <span class="badge bg-info text-dark">@partido.Fase</span>
+                            </td>
+                            <td>@partido.Grupo</td>
+                            <td>@partido.Fecha.ToString("dd/MM/yy HH:mm")</td>
+                            <td class="@(EsGanador(partido, true) ? "fw-bold text-success" : "")">
+                                @partido.EquipoLocal.Nombre
+                            </td>
+                            <td class="text-center fw-bold">
+                                @if (partido.GolesLocal.HasValue && partido.GolesVisitante.HasValue)
+                                {
+                                    <span class="badge bg-dark">
+                                        @partido.GolesLocal - @partido.GolesVisitante
+                                    </span>
+                                }
+                                else
+                                {
+                                    <span class="text-muted">vs</span>
+                                }
+                            </td>
+                            <td class="@(EsGanador(partido, false) ? "fw-bold text-success" : "")">
+                                @partido.EquipoVisitante.Nombre
+                            </td>
+                            <td>@partido.Estadio.Nombre</td>
+                            <td>
+                                @if (!(partido.GolesLocal.HasValue && partido.GolesVisitante.HasValue))
+                                {
+                                    <button class="btn btn-sm btn-outline-primary"
+                                            @onclick="@(() => AbrirEdicion(partido))">
+                                        Editar
+                                    </button>
+                                }
+                                else
+                                {
+                                    <span class="badge bg-success">Jugado</span>
+                                }
+                            </td>
+                        </tr>
+                    }
+                </tbody>
+            </table>
+        }
+
+        @if (mostrarEdicion && partidoEditando != null)
+        {
+            <div class="card mt-4 border-primary">
+                <div class="card-header bg-primary text-white">
+                    <strong>
+                        Editar partido #@partidoEditando.Id —
+                        @partidoEditando.EquipoLocal.Nombre
+                        vs
+                        @partidoEditando.EquipoVisitante.Nombre
+                    </strong>
+                </div>
+                <div class="card-body">
+
+                    <div class="row mb-2">
+                        <div class="col-md-3">
+                            <strong>Local:</strong> @partidoEditando.EquipoLocal.Nombre
+                        </div>
+                        <div class="col-md-3">
+                            <strong>Visitante:</strong> @partidoEditando.EquipoVisitante.Nombre
+                        </div>
+                        <div class="col-md-2">
+                            <strong>Grupo:</strong> @partidoEditando.Grupo
+                        </div>
+                        <div class="col-md-4">
+                            <strong>Fase:</strong> @partidoEditando.Fase
+                        </div>
+                    </div>
+
+                    <hr />
+
+                    <div class="row g-3">
+                        <div class="col-md-4">
+                            <label class="form-label">Fecha y hora</label>
+                            <input type="datetime-local"
+                                   class="form-control"
+                                   @bind="formFecha" />
+                        </div>
+                        <div class="col-md-4">
+                            <label class="form-label">Estadio</label>
+                            <select class="form-select" @bind="formEstadioId">
+                                @foreach (var est in estadios)
+                                {
+                                    <option value="@est.Id">@est.Nombre — @est.Ciudad</option>
+                                }
+                            </select>
+                        </div>
+                    </div>
+
+                    <div class="row g-3 mt-1">
+                        <div class="col-md-2">
+                            <label class="form-label">
+                                Goles @partidoEditando.EquipoLocal.Nombre
+                            </label>
+                            <input type="number"
+                                   class="form-control"
+                                   @bind="formGolesLocal"
+                                   min="0" />
+                        </div>
+                        <div class="col-md-2">
+                            <label class="form-label">
+                                Goles @partidoEditando.EquipoVisitante.Nombre
+                            </label>
+                            <input type="number"
+                                   class="form-control"
+                                   @bind="formGolesVisitante"
+                                   min="0" />
+                        </div>
+                        <div class="col-md-4 d-flex align-items-end">
+                            <div class="form-check">
+                                <input class="form-check-input"
+                                       type="checkbox"
+                                       id="cargarResultado"
+                                       @bind="cargarResultado" />
+                                <label class="form-check-label" for="cargarResultado">
+                                    Cargar resultado
+                                </label>
+                            </div>
+                        </div>
+                    </div>
+
+                    @if (cargarResultado)
+                    {
+                        <div class="alert alert-warning mt-2 py-2 small">
+                            Una vez cargado el resultado no se puede editar el partido.
+                        </div>
+                    }
+
+                    <div class="mt-3">
+                        <button class="btn btn-success me-2" @onclick="Guardar">
+                            Guardar
+                        </button>
+                        <button class="btn btn-secondary"
+                                @onclick="@(() => mostrarEdicion = false)">
+                            Cancelar
+                        </button>
+                    </div>
+                </div>
+            </div>
+        }
+
+    </div>
+}
+
+@code {
+    private List<PartidoDTO> partidos = new();
+    private List<EstadioDTO> estadios = new();
+    private PartidoDTO? partidoEditando;
+    private bool mostrarEdicion;
+    private bool paginaCargada;
+    private string mensajeError = string.Empty;
+    private string mensajeExito = string.Empty;
+
+    private string filtroFase = string.Empty;
+    private string filtroGrupo = string.Empty;
+    private string filtroEstadio = string.Empty;
+
+    private static readonly string[] gruposDisponibles =
+        { "A","B","C","D","E","F","G","H","I","J","K","L" };
+
+    // Formulario de edicion — variables intermedias, nunca bind directo al dominio
+    private DateTime formFecha;
+    private int formEstadioId;
+    private int formGolesLocal;
+    private int formGolesVisitante;
+    private bool cargarResultado;
+
+    private IEnumerable<PartidoDTO> PartidosFiltrados =>
+        partidos
+            .Where(p => string.IsNullOrEmpty(filtroFase)
+                        || p.Fase.ToString() == filtroFase)
+            .Where(p => string.IsNullOrEmpty(filtroGrupo)
+                        || p.Grupo == filtroGrupo)
+            .Where(p => string.IsNullOrEmpty(filtroEstadio)
+                        || p.Estadio.Nombre == filtroEstadio)
+            .OrderBy(p => p.Fecha);
+
+    protected override void OnInitialized()
+    {
+        if (!ServicioSesion.EstaLogueado)
+        {
+            Navigation.NavigateTo("/login", replace: true);
+            return;
+        }
+
+        bool esAdmin = ServicioRoles.EsAdmin();
+        bool esEditor = ServicioRoles.EsEditor();
+
+        if (!esAdmin && !esEditor)
+        {
+            Navigation.NavigateTo("/", replace: true);
+            return;
+        }
+
+        CargarDatos();
+        paginaCargada = true;
+    }
+
+    private void CargarDatos()
+    {
+        try
+        {
+            partidos = PartidoServicio.ListarTodos();
+            estadios = EstadioServicio.ListarTodos();
+        }
+        catch (Exception)
+        {
+            mensajeError = "No se pudieron cargar los datos. Intentá recargar la página.";
+        }
+    }
+
+    private void AbrirEdicion(PartidoDTO partido)
+    {
+        partidoEditando = partido;
+        formFecha = partido.Fecha;
+        formEstadioId = partido.Estadio.Id;
+        formGolesLocal = 0;
+        formGolesVisitante = 0;
+        cargarResultado = false;
+        mensajeError = string.Empty;
+        mostrarEdicion = true;
+    }
+
+    private void Guardar()
+    {
+        try
+        {
+            string email = ServicioSesion.ObtenerUsuarioActual().CorreoElectronico;
+            bool anyChange = false;
+            mensajeError = string.Empty;
+            if (formFecha != partidoEditando!.Fecha)
+            {
+                try
+                {
+                    PartidoServicio.ModificarFecha(partidoEditando.Id, formFecha, email);
+                    anyChange = true;
+                }
+                catch (Exception ex)
+                {
+                    mensajeError = ex.Message;
+                    return;
+                }
+            }
+            
+            if (formEstadioId != partidoEditando.Estadio?.Id)
+            {
+                try
+                {
+                    PartidoServicio.ModificarEstadio(partidoEditando.Id, formEstadioId, email);
+                    anyChange = true;
+                }
+                catch (Exception ex)
+                {
+                    mensajeError = ex.Message;
+                    return;
+                }
+            }
+            
+            if (cargarResultado)
+            {
+                try
+                {
+                    PartidoServicio.CargarResultado(
+                        partidoEditando.Id, formGolesLocal, formGolesVisitante, email);
+                    anyChange = true;
+                }
+                catch (Exception ex)
+                {
+                    mensajeError = ex.Message;
+                    return;
+                }
+            }
+
+            if (anyChange)
+            {
+                mensajeExito = cargarResultado
+                    ? $"Resultado cargado: {formGolesLocal} - {formGolesVisitante}."
+                    : "Partido actualizado.";
+
+                mostrarEdicion = false;
+                CargarDatos();
+            }
+            else
+            {
+                mensajeError = "No se realizaron cambios. Es posible que no tengas permiso o que la fase no permita editar este partido.";
+            }
+        }
+        catch (Exception ex)
+        {
+            mensajeError = ex.Message;
+        }
+    }
+
+    private void LimpiarFiltros()
+    {
+        filtroFase = string.Empty;
+        filtroGrupo = string.Empty;
+        filtroEstadio = string.Empty;
+    }
+
+    private bool EsGanador(PartidoDTO p, bool esLocal) =>
+        p.EstaJugado && (esLocal
+            ? p.GolesLocal > p.GolesVisitante
+            : p.GolesVisitante > p.GolesLocal);
+
+    private bool TienePermiso(string roleName) => ServicioRoles.TienePermiso(roleName);
+    
+    
+}

@@ -1,0 +1,486 @@
+﻿@page "/usuarios"
+@rendermode InteractiveServer
+@using Sistema
+@using Sistema.Interfaces
+@using Sistema.DTOs
+@inject IServicioUsuario ServicioUsuario
+@inject IServicioSesion ServicioSesion
+@inject IServicioRoles ServicioRoles
+@inject NavigationManager Navigation
+
+<PageTitle>Gestión de Usuarios - World Cup Planner</PageTitle>
+
+<div class="container mt-5">
+    <h2 class="mb-4">Gestión de Usuarios</h2>
+
+    @if (!string.IsNullOrEmpty(mensajeError))
+    {
+        <div class="alert alert-danger alert-dismissible fade show">
+            @mensajeError
+            <button type="button" class="btn-close" @onclick="@(() => mensajeError = "")"></button>
+        </div>
+    }
+
+    @if (!string.IsNullOrEmpty(mensajeExito))
+    {
+        <div class="alert alert-success alert-dismissible fade show">
+            @mensajeExito
+            <button type="button" class="btn-close" @onclick="@(() => mensajeExito = "")"></button>
+        </div>
+    }
+
+    <button class="btn btn-primary mb-3" @onclick="MostrarCrear">
+        <span class="bi bi-plus-circle"></span> Crear Usuario
+    </button>
+
+    @if (usuarios.Count > 0)
+    {
+        <div class="table-responsive">
+            <table class="table table-striped table-hover">
+                <thead class="table-dark">
+                    <tr>
+                        <th>ID</th>
+                        <th>Nombre</th>
+                        <th>Email</th>
+                        <th>Roles</th>
+                        <th>Acciones</th>
+                    </tr>
+                </thead>
+                <tbody>
+                    @foreach (var usuario in usuarios)
+                    {
+                        <tr>
+                            <td>@usuario.Id</td>
+                            <td>@usuario.Nombre @usuario.Apellido</td>
+                            <td>@usuario.CorreoElectronico</td>
+                            <td>
+                                @if (usuario.Roles.Count > 0)
+                                {
+                                    @foreach (var rol in usuario.Roles)
+                                    {
+                                        <span class="badge bg-info">@rol</span>
+                                    }
+                                }
+                                else
+                                {
+                                    <span class="badge bg-secondary">Sin roles</span>
+                                }
+                            </td>
+                            <td>
+                                <button class="btn btn-sm btn-warning" @onclick="@(() => MostrarEditar(usuario.Id))">Editar</button>
+                                <button class="btn btn-sm btn-info" @onclick="@(() => MostrarRoles(usuario.Id))">Roles</button>
+                                <button class="btn btn-sm btn-secondary" @onclick="@(() => MostrarRestablecer(usuario.Id))">Restablecer</button>
+                                <button class="btn btn-sm btn-danger" @onclick="@(() => MostrarEliminar(usuario.Id))">Eliminar</button>
+                            </td>
+                        </tr>
+                    }
+                </tbody>
+            </table>
+        </div>
+    }
+    else
+    {
+        <p class="alert alert-info">Cargando usuarios...</p>
+    }
+</div>
+
+@if (mostrarFormulario)
+{
+    <div class="modal d-block" style="display: block;" tabindex="-1">
+        <div class="modal-dialog">
+            <div class="modal-content">
+                <div class="modal-header">
+                    <h5 class="modal-title">@(editando != null ? "Modificar Usuario" : "Crear Usuario")</h5>
+                    <button type="button" class="btn-close" @onclick="Cancelar"></button>
+                </div>
+                <div class="modal-body">
+                    <div class="mb-3">
+                        <label class="form-label">Nombre</label>
+                        <input type="text" class="form-control" @bind="nombre" />
+                    </div>
+                    <div class="mb-3">
+                        <label class="form-label">Apellido</label>
+                        <input type="text" class="form-control" @bind="apellido" />
+                    </div>
+                    <div class="mb-3">
+                        <label class="form-label">Email</label>
+                        <input type="email" class="form-control" @bind="correoElectronico" />
+                    </div>
+                    <div class="mb-3">
+                        <label class="form-label">Fecha de Nacimiento</label>
+                        <input type="text"
+                               class="form-control @(string.IsNullOrEmpty(fechaNacimientoError) ? "" : "is-invalid")"
+                               value="@fechaNacimientoTexto"
+                               placeholder="MM-DD-YYYY"
+                               maxlength="10"
+                               inputmode="numeric"
+                               @oninput="OnFechaTextoInput" />
+                        @if (!string.IsNullOrEmpty(fechaNacimientoError))
+                        {
+                            <div class="invalid-feedback d-block">@fechaNacimientoError</div>
+                        }
+                    </div>
+                    @if (editando == null)
+                    {
+                        <div class="mb-3">
+                            <label class="form-label">Contraseña</label>
+                            <input type="password" class="form-control" @bind="contrasenia" />
+                            <small class="form-text text-muted">Min 8 caracteres, mayúscula, minúscula, número y especial</small>
+                        </div>
+                    }
+                </div>
+                <div class="modal-footer">
+                    <button type="button" class="btn btn-secondary" @onclick="Cancelar">Cancelar</button>
+                    <button type="button" class="btn btn-primary" @onclick="GuardarUsuario" disabled="@guardando">
+                        @if (guardando) { <span class="spinner-border spinner-border-sm me-2"></span> }
+                        @(editando != null ? "Actualizar" : "Crear")
+                    </button>
+                </div>
+            </div>
+        </div>
+    </div>
+    <div class="modal-backdrop fade show"></div>
+}
+
+@if (mostrarModalRoles)
+{
+    <div class="modal d-block" style="display: block;" tabindex="-1">
+        <div class="modal-dialog">
+            <div class="modal-content">
+                <div class="modal-header">
+                    <h5 class="modal-title">Gestionar Roles - @rolesUsuario?.Nombre</h5>
+                    <button type="button" class="btn-close" @onclick="@(() => mostrarModalRoles = false)"></button>
+                </div>
+                <div class="modal-body">
+                    @if (rolesUsuario != null)
+                    {
+                        @foreach (var rol in ServicioRoles.ObtenerRolesDisponibles())                        {                            var tieneRol = rolesUsuario.Roles.Any(r => r.ToString() == rol);                            <div class="form-check">                                <input class="form-check-input" type="checkbox" id="rol_@rol"                                        checked="@tieneRol"                                        @onchange="@((ChangeEventArgs? e) => CambiarRol(rol, e?.Value as bool? ?? false))" />                                <label class="form-check-label" for="rol_@rol">@rol</label>                            </div>                        }
+                    }
+                </div>
+                <div class="modal-footer">
+                    <button type="button" class="btn btn-secondary" @onclick="@(() => mostrarModalRoles = false)">Cerrar</button>
+                </div>
+            </div>
+        </div>
+    </div>
+    <div class="modal-backdrop fade show"></div>
+}
+
+@if (mostrarConfirmacion)
+{
+    <div class="modal d-block" style="display: block;" tabindex="-1">
+        <div class="modal-dialog">
+            <div class="modal-content">
+                <div class="modal-header">
+                    <h5 class="modal-title">Confirmar Eliminación</h5>
+                    <button type="button" class="btn-close" @onclick="@(() => mostrarConfirmacion = false)"></button>
+                </div>
+                <div class="modal-body">
+                    <p>¿Eliminar este usuario? No se puede deshacer.</p>
+                </div>
+                <div class="modal-footer">
+                    <button type="button" class="btn btn-secondary" @onclick="@(() => mostrarConfirmacion = false)">Cancelar</button>
+                    <button type="button" class="btn btn-danger" @onclick="EliminarUsuario" disabled="@guardando">
+                        @if (guardando) { <span class="spinner-border spinner-border-sm me-2"></span> }
+                        Eliminar
+                    </button>
+                </div>
+            </div>
+        </div>
+    </div>
+    <div class="modal-backdrop fade show"></div>
+}
+
+@if (mostrarConfirmacionRestablecer)
+{
+    <div class="modal d-block" style="display: block;" tabindex="-1">
+        <div class="modal-dialog">
+            <div class="modal-content">
+                <div class="modal-header">
+                    <h5 class="modal-title">Restablecer Contraseña</h5>
+                    <button type="button" class="btn-close" @onclick="@(() => mostrarConfirmacionRestablecer = false)"></button>
+                </div>
+                <div class="modal-body">
+                    <p>¿Restablecer la contraseña de este usuario al valor por defecto? El usuario deberá iniciar sesión con la nueva contraseña.</p>
+                </div>
+                <div class="modal-footer">
+                    <button type="button" class="btn btn-secondary" @onclick="@(() => mostrarConfirmacionRestablecer = false)">Cancelar</button>
+                    <button type="button" class="btn btn-warning" @onclick="RestablecerContrasenia" disabled="@guardando">
+                        @if (guardando) { <span class="spinner-border spinner-border-sm me-2"></span> }
+                        Restablecer
+                    </button>
+                </div>
+            </div>
+        </div>
+    </div>
+    <div class="modal-backdrop fade show"></div>
+}
+
+@code {
+    private List<UsuarioDTO> usuarios = new();
+    private UsuarioDTO? formulario;
+    private UsuarioDTO? editando;
+    private UsuarioDTO? rolesUsuario;
+    private int? usuarioAEliminar;
+    
+    // Campos del formulario para crear/editar
+    private string nombre = "";
+    private string apellido = "";
+    private string correoElectronico = "";
+    private DateOnly fechaNacimiento = DateOnly.FromDateTime(DateTime.Now.AddYears(-20));
+    private string fechaNacimientoTexto = DateOnly.FromDateTime(DateTime.Now.AddYears(-20)).ToString("MM-dd-yyyy");
+    private string fechaNacimientoError = "";
+    private string contrasenia = "";
+    
+    private bool mostrarFormulario;
+    private bool mostrarModalRoles;
+    private bool mostrarConfirmacion;
+    private bool mostrarConfirmacionRestablecer;
+    private int? usuarioAResetear;
+    private bool guardando;
+    
+    private string mensajeError = "";
+    private string mensajeExito = "";
+
+    protected override void OnInitialized()
+    {
+        try
+        {
+            if (!ServicioRoles.EsAdmin())
+            {
+                Navigation.NavigateTo("/login", replace: true);
+                return;
+            }
+            Recargar();
+        }
+        catch
+        {
+            Navigation.NavigateTo("/login", replace: true);
+        }
+    }
+
+    private void Recargar() => usuarios = ServicioUsuario.ObtenerListaUsuarios().ToList();
+
+    private void MostrarCrear()
+    {
+        editando = null;
+        formulario = null;
+        LimpiarCampos();
+        mostrarFormulario = true;
+    }
+
+    private void MostrarEditar(int id)
+    {
+        editando = ServicioUsuario.ObtenerUsuario(id);
+        formulario = editando;
+        CargarCamposDesdeUsuario(editando);
+        mostrarFormulario = true;
+    }
+
+    private void MostrarRoles(int id)
+    {
+        rolesUsuario = ServicioUsuario.ObtenerUsuario(id);
+        mostrarModalRoles = true;
+    }
+
+    private void MostrarEliminar(int id)
+    {
+        usuarioAEliminar = id;
+        mostrarConfirmacion = true;
+    }
+    
+
+    private void GuardarUsuario()
+    {
+        var esNuevoUsuario = editando == null;
+
+        try
+        {
+            guardando = true;
+            mensajeError = "";
+
+            if (string.IsNullOrWhiteSpace(fechaNacimientoTexto) ||
+                !DateOnly.TryParseExact(fechaNacimientoTexto, "MM-dd-yyyy", System.Globalization.CultureInfo.InvariantCulture, System.Globalization.DateTimeStyles.None, out var fechaValida))
+            {
+                fechaNacimientoError = "Fecha inválida. Usa MM-DD-AAAA.";
+                mensajeError = fechaNacimientoError;
+                return;
+            }
+
+            fechaNacimiento = fechaValida;
+            fechaNacimientoTexto = fechaValida.ToString("MM-dd-yyyy");
+            fechaNacimientoError = "";
+
+            if (editando != null)
+            {
+                // Editar usuario existente
+                editando.Nombre = nombre;
+                editando.Apellido = apellido;
+                editando.CorreoElectronico = correoElectronico;
+                editando.FechaNacimiento = fechaNacimiento;
+                ServicioUsuario.ModificarUsuario(editando.Id, editando);
+                mensajeExito = "Usuario actualizado";
+            }
+            else
+            {
+                // Crear nuevo usuario - se crea la instancia
+                if (string.IsNullOrWhiteSpace(contrasenia))
+                    throw new Exception("Contraseña requerida");
+                
+                formulario = new UsuarioDTO();
+                formulario.Nombre = nombre;
+                formulario.Apellido = apellido;
+                formulario.CorreoElectronico = correoElectronico;
+                formulario.FechaNacimiento = fechaNacimiento;
+                
+                ServicioUsuario.CrearUsuario(formulario, contrasenia);
+                mensajeExito = "Usuario creado";
+            }
+            
+            if (!esNuevoUsuario)
+                Cancelar();
+            Recargar();
+        }
+        catch (Exception ex)
+        {
+            mensajeError = ex.Message;
+        }
+        finally
+        {
+            if (esNuevoUsuario)
+                Cancelar();
+            guardando = false;
+        }
+    }
+
+    private void EliminarUsuario()
+    {
+        try
+        {
+            guardando = true;
+            if (usuarioAEliminar.HasValue)
+            {
+                ServicioUsuario.EliminarUsuario(usuarioAEliminar.Value);
+                mensajeExito = "Usuario eliminado";
+                mostrarConfirmacion = false;
+                Recargar();
+            }
+        }
+        catch (Exception ex)
+        {
+            mensajeError = ex.Message;
+        }
+        finally
+        {
+            guardando = false;
+        }
+    }
+
+    private void CambiarRol(string rol, bool agregar)
+    {
+        try
+        {
+            if (rolesUsuario == null) return;
+            if (agregar)
+                ServicioRoles.AsignarRolPorNombre(rolesUsuario.Id, rol);
+            else
+                ServicioRoles.QuitarRolPorNombre(rolesUsuario.Id, rol);
+            
+            rolesUsuario = ServicioUsuario.ObtenerUsuario(rolesUsuario.Id);
+            if (rolesUsuario.Id == ServicioSesion.UsuarioActual?.Id)
+            {
+                mensajeExito = "Rol actualizado. Debes volver a iniciar sesión para que los cambios se apliquen.";
+            }
+            else
+            {
+                mensajeExito = "Rol actualizado";
+            }
+            Recargar();
+        }
+        catch (Exception ex)
+        {
+            mensajeError = ex.Message;
+        }
+    }
+
+    private void MostrarRestablecer(int id)
+    {
+        usuarioAResetear = id;
+        mostrarConfirmacionRestablecer = true;
+    }
+
+    private void RestablecerContrasenia()
+    {
+        try
+        {
+            guardando = true;
+            mensajeError = "";
+            if (usuarioAResetear.HasValue)
+            {
+                ServicioUsuario.GenerarContraseniaDefecto(usuarioAResetear.Value);
+                mensajeExito = "Contraseña restablecida al valor por defecto.";
+                mostrarConfirmacionRestablecer = false;
+                Recargar();
+            }
+        }
+        catch (Exception ex)
+        {
+            mensajeError = ex.Message;
+        }
+        finally
+        {
+            guardando = false;
+        }
+    }
+
+    private void Cancelar()
+    {
+        mostrarFormulario = false;
+        formulario = null;
+        editando = null;
+        LimpiarCampos();
+    }
+    
+    private void LimpiarCampos()
+    {
+        nombre = "";
+        apellido = "";
+        correoElectronico = "";
+        fechaNacimiento = DateOnly.FromDateTime(DateTime.Now.AddYears(-20));
+        fechaNacimientoTexto = fechaNacimiento.ToString("MM-dd-yyyy");
+        fechaNacimientoError = "";
+        contrasenia = "";
+    }
+    
+    private void CargarCamposDesdeUsuario(UsuarioDTO usuario)
+    {
+        nombre = usuario.Nombre;
+        apellido = usuario.Apellido;
+        correoElectronico = usuario.CorreoElectronico;
+        fechaNacimiento = usuario.FechaNacimiento;
+        fechaNacimientoTexto = usuario.FechaNacimiento.ToString("MM-dd-yyyy");
+        fechaNacimientoError = "";
+        contrasenia = "";
+    }
+
+    private void OnFechaTextoInput(ChangeEventArgs e)
+    {
+        fechaNacimientoTexto = e.Value?.ToString() ?? "";
+        if (string.IsNullOrWhiteSpace(fechaNacimientoTexto))
+        {
+            fechaNacimientoError = "La fecha de nacimiento es requerida.";
+            return;
+        }
+
+        if (DateOnly.TryParseExact(fechaNacimientoTexto, "MM-dd-yyyy", System.Globalization.CultureInfo.InvariantCulture, System.Globalization.DateTimeStyles.None, out var fecha))
+        {
+            fechaNacimientoError = "";
+            fechaNacimiento = fecha;
+            fechaNacimientoTexto = fecha.ToString("MM-dd-yyyy");
+        }
+        else
+        {
+            fechaNacimientoError = "Fecha inválida. Usa MM-DD-AAAA.";
+        }
+    }
+}

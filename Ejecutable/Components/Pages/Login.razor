@@ -1,0 +1,121 @@
+@page "/login"
+@rendermode InteractiveServer
+@using Sistema.Interfaces
+@using Sistema
+@inject IServicioUsuario ServicioUsuario
+@inject IServicioSesion ServicioSesion
+@inject NavigationManager Navigation
+
+<PageTitle>Login - World Cup Planner</PageTitle>
+
+@if (!sesionVerificada)
+{
+    <div class="container mt-5">
+        <div class="row justify-content-center">
+            <div class="col-md-6 text-center">
+                <div class="spinner-border" role="status">
+                    <span class="visually-hidden">Verificando...</span>
+                </div>
+                <p class="mt-3">Verificando sesión...</p>
+            </div>
+        </div>
+    </div>
+}
+else
+{
+    <div class="container mt-5">
+        <div class="row justify-content-center">
+            <div class="col-md-6">
+                <div class="card">
+                    <div class="card-body">
+                        <h3 class="card-title text-center mb-4">Iniciar Sesión</h3>
+
+                        @if (!string.IsNullOrEmpty(errorMessage))
+                        {
+                            <div class="alert alert-danger alert-dismissible fade show" role="alert">
+                                @errorMessage
+                                <button type="button" class="btn-close" @onclick="@(() => errorMessage = string.Empty)"></button>
+                            </div>
+                        }
+
+                        <form @onsubmit="HandleLogin">
+                            <div class="mb-3">
+                                <label for="email" class="form-label">Correo Electrónico</label>
+                                <input type="email" class="form-control" id="email" placeholder="Ingrese su correo" 
+                                       @bind="email" required />
+                            </div>
+
+                            <div class="mb-3">
+                                <label for="password" class="form-label">Contraseña</label>
+                                <input type="password" class="form-control" id="password" placeholder="Ingrese su contraseña" 
+                                       @bind="password" required />
+                            </div>
+
+                            <button type="submit" class="btn btn-primary w-100" disabled="@isLoading">
+                                @if (isLoading)
+                                {
+                                    <span class="spinner-border spinner-border-sm me-2"></span>
+                                }
+                                else
+                                {
+                                    <span>Iniciar Sesión</span>
+                                }
+                            </button>
+                        </form>
+                    </div>
+                </div>
+            </div>
+        </div>
+    </div>
+}
+
+@code {
+    private string email = string.Empty;
+    private string password = string.Empty;
+    private string errorMessage = string.Empty;
+    private bool isLoading = false;
+    private bool sesionVerificada = false;
+
+    protected override void OnInitialized()
+    {
+        // Verificar si hay sesión activa ANTES de renderizar
+        try
+        {
+            var usuarioActual = ServicioSesion.ObtenerUsuarioActual();
+            if (usuarioActual != null)
+            {
+                Navigation.NavigateTo("/home", replace: true);
+                return;
+            }
+        }
+        catch
+        {
+            // No hay sesión activa
+        }
+
+        // Si llegamos aquí, no hay sesión activa, permitir renderización del formulario
+        sesionVerificada = true;
+    }
+
+    private async Task HandleLogin()
+    {
+        isLoading = true;
+        errorMessage = string.Empty;
+
+        try
+        {
+            await Task.Run(() => ServicioUsuario.IniciarSesion(email, password));
+            Navigation.NavigateTo("/home");
+        }
+        catch
+        {
+            errorMessage = "Correo o contraseña incorrectos. Intente nuevamente.";
+            email = string.Empty;
+            password = string.Empty;
+        }
+        finally
+        {
+            isLoading = false;
+        }
+    }
+}

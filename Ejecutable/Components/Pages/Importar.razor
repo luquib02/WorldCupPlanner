@@ -1,0 +1,142 @@
+@page "/importar"
+@rendermode InteractiveServer
+@inject IServicioSesion ServicioSesion
+@inject Sistema.Interfaces.IServicioRoles ServicioRoles
+@inject IImportacionServicio ImportacionServicio
+@inject NavigationManager Navigation
+@using Sistema
+@using Sistema.Interfaces
+@using Sistema.Importacion
+@* Dominio removido: no se usan tipos de Dominio en esta página *@
+
+
+<PageTitle>Importar Equipos</PageTitle>
+
+@if (!paginaCargada)
+{
+    <div class="d-flex justify-content-center mt-5">
+        <div class="spinner-border" role="status"></div>
+    </div>
+}
+else
+{
+    <div class="container mt-4">
+        <h3>Importar Equipos</h3>
+        <p class="text-muted">
+            El archivo CSV debe tener los encabezados: <strong>Nombre, Confederacion, RankingFIFA</strong>
+        </p>
+
+        @if (!string.IsNullOrEmpty(mensajeError))
+        {
+            <div class="alert alert-danger alert-dismissible">
+                @mensajeError
+                <button type="button" class="btn-close" @onclick="@(() => mensajeError = string.Empty)"></button>
+            </div>
+        }
+
+        @if (resultado != null)
+        {
+            <div class="alert @(resultado.TieneErrores ? "alert-warning" : "alert-success")">
+                <strong>Importación completada.</strong>
+                <br />
+                Equipos importados exitosamente: <strong>@resultado.Exitosos</strong>
+                @if (resultado.TieneErrores)
+                {
+                    <hr />
+                    <p><strong>Errores encontrados:</strong></p>
+                    <ul>
+                        @foreach (string error in resultado.Errores)
+                        {
+                            <li>@error</li>
+                        }
+                    </ul>
+                }
+            </div>
+        }
+
+        <div class="card mt-3">
+            <div class="card-body">
+                <div class="mb-3">
+                    <label class="form-label">Seleccionar archivo CSV *</label>
+                    <InputFile class="form-control"
+                               accept=".csv"
+                               OnChange="SeleccionarArchivo" />
+                </div>
+                <button class="btn btn-primary"
+                        @onclick="EjecutarImportacion"
+                        disabled="@(archivoSeleccionado == null)">
+                    Importar
+                </button>
+            </div>
+        </div>
+    </div>
+}
+
+@code {
+    private bool paginaCargada;
+    private string mensajeError = string.Empty;
+    private ResultadoImportacion? resultado;
+    private IBrowserFile? archivoSeleccionado;
+
+    protected override void OnInitialized()
+    {
+        if (!ServicioSesion.EstaLogueado)
+        {
+            Navigation.NavigateTo("/login", replace: true);
+            return;
+        }
+
+        bool esAdmin = ServicioRoles.EsAdmin();
+        bool esEditor = ServicioRoles.EsEditor();
+
+        if (!esEditor && !esAdmin)
+        {
+            Navigation.NavigateTo("/", replace: true);
+            return;
+        }
+
+        paginaCargada = true;
+    }
+
+    private void SeleccionarArchivo(InputFileChangeEventArgs e)
+    {
+        resultado = null;
+        mensajeError = string.Empty;
+
+        if (!e.File.Name.EndsWith(".csv"))
+        {
+            mensajeError = "El archivo debe ser un CSV.";
+            archivoSeleccionado = null;
+            return;
+        }
+
+        if (e.File.Size == 0)
+        {
+            mensajeError = "El archivo está vacío.";
+            archivoSeleccionado = null;
+            return;
+        }
+
+        archivoSeleccionado = e.File;
+    }
+    
+    private async Task EjecutarImportacion()
+    {
+        if (archivoSeleccionado == null)
+            return;
+
+        try
+        {
+            using StreamReader reader = new StreamReader(
+                archivoSeleccionado.OpenReadStream());
+            string contenidoCsv = await reader.ReadToEndAsync();
+            resultado = ImportacionServicio.Importar(contenidoCsv);
+        }
+        catch (Exception ex)
+        {
+            mensajeError = ex.Message;
+        }
+    }
+
+    private bool TienePermiso(string roleName) => ServicioRoles.TienePermiso(roleName);
+} 

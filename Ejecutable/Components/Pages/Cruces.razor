@@ -1,0 +1,363 @@
+﻿@page "/cruces"
+@rendermode InteractiveServer
+@inject CrucesServicio CrucesServicio
+@inject FixtureServicio FixtureServicio
+@inject IServicioSesion ServicioSesion
+@inject Sistema.Interfaces.IServicioRoles ServicioRoles
+@inject NavigationManager Navigation
+@using Sistema
+@using Sistema.Interfaces
+@using Dominio
+@using Sistema.DTOs
+
+
+<PageTitle>Cruces</PageTitle>
+
+@if (!paginaCargada)
+{
+    <div class="d-flex justify-content-center mt-5">
+        <div class="spinner-border" role="status"></div>
+    </div>
+}
+else
+{
+    <div class="container mt-4">
+        <h3>Cruces eliminatorios</h3>
+
+        @if (!string.IsNullOrEmpty(mensajeError))
+        {
+            <div class="alert alert-danger alert-dismissible">
+                @mensajeError
+                <button type="button" class="btn-close"
+                        @onclick="@(() => mensajeError = string.Empty)">
+                </button>
+            </div>
+        }
+
+        @if (!string.IsNullOrEmpty(mensajeExito))
+        {
+            <div class="alert alert-success alert-dismissible">
+                @mensajeExito
+                <button type="button" class="btn-close"
+                        @onclick="@(() => mensajeExito = string.Empty)">
+                </button>
+            </div>
+        }
+
+        @if (fixture == null)
+        {
+            <div class="alert alert-warning">
+                No hay fixture generado. Generá el fixture primero desde la página Fixture.
+            </div>
+        }
+        else if (!fixture.CrucesGenerados)
+        {
+            <div class="card border-primary">
+                <div class="card-body">
+                    <h5>
+                        Fase de grupos:
+                        @if (FixtureServicio.EstaFaseGruposCompleta())
+                        {
+                            <span class="text-success fw-bold">Completa ✅</span>
+                        }
+                        else
+                        {
+                            int jugados = fixture.Grupos.SelectMany(g => g.Jornadas).SelectMany(j => j.Partidos).Count(p => p.GolesLocal.HasValue && p.GolesVisitante.HasValue);                            int total = fixture.Grupos.SelectMany(g => g.Jornadas).SelectMany(j => j.Partidos).Count();
+                            <span class="text-warning">En curso (@jugados / @total jugados) ⏳</span>
+                        }
+                    </h5>
+
+                    @if (FixtureServicio.EstaFaseGruposCompleta())
+                    {
+                        <p class="text-muted">
+                            Todos los partidos de grupos están jugados. Podés generar los cruces.
+                        </p>
+                        <div class="col-md-3 mb-3">
+                            <label class="form-label">SemillaCrucesFase</label>
+                            <input type="number" class="form-control" @bind="formSemilla" />
+                        </div>
+                        <button class="btn btn-primary" disabled="@_generandoDieciseisavos" @onclick="GenerarDieciseisavos">
+                            @if (_generandoDieciseisavos)
+                            {
+                                <span class="spinner-border spinner-border-sm me-1" role="status"></span>
+                                <span>Generando...</span>
+                            }
+                            else
+                            {
+                                <span>Generar dieciseisavos</span>
+                            }
+                        </button>
+                    }
+                    else
+                    {
+                        <p class="text-muted">
+                            Completá todos los partidos de la fase de grupos para continuar.
+                        </p>
+                    }
+                </div>
+            </div>
+        }
+        else
+        {
+            @foreach (FasePartido fase in fasesOrden)
+            {
+                List<PartidoDTO> partidosFase = fixture.PartidosEliminatorias                    .Where(p => p.Fase == fase)                    .OrderBy(p => p.EtiquetaCruce)                    .ToList();
+
+                @if (partidosFase.Any())
+                {
+                    <div class="mt-4">
+                        <h5 class="border-bottom pb-1 text-primary">
+                            @fase
+                            <small class="text-muted fs-6">
+                                (@partidosFase.Count(p => p.EstaJugado) / @partidosFase.Count jugados)
+                            </small>
+                        </h5>
+
+                        <div class="row row-cols-2 row-cols-md-4 g-2">
+                            @foreach (var partido in partidosFase)                            {                                <div class="col">                                    <div class="card card-body p-2 small                                        @((partido.GolesLocal.HasValue && partido.GolesVisitante.HasValue) ? "bg-light" : "")">
+                                        <div class="text-muted fw-bold mb-1">
+                                            @partido.EtiquetaCruce
+                                        </div>
+                                        <div class="d-flex justify-content-between align-items-center">
+                                            <span class="@(EsGanador(partido, true) ? "fw-bold text-success" : "")">
+                                                @partido.EquipoLocal!.Nombre
+                                            </span>
+                                            <span class="mx-1 text-center fw-bold">
+                                                @if (partido.GolesLocal.HasValue && partido.GolesVisitante.HasValue)
+                                                {
+                                                    <span class="badge bg-dark">
+                                                        @partido.GolesLocal - @partido.GolesVisitante
+                                                    </span>
+                                                    @if (partido.GolesPenalesLocal.HasValue)
+                                                    {
+                                                        <span class="badge bg-secondary ms-1" title="Penales">
+                                                            (@partido.GolesPenalesLocal - @partido.GolesPenalesVisitante)
+                                                        </span>
+                                                    }
+                                                }
+                                                else
+                                                {
+                                                    <span class="text-muted">vs</span>
+                                                }
+                                            </span>
+                                            <span class="@(EsGanador(partido, false) ? "fw-bold text-success" : "")">
+                                                @partido.EquipoVisitante!.Nombre
+                                            </span>
+                                        </div>
+                                    </div>
+                                </div>
+                            }
+                        </div>
+
+                        <div class="mt-2 d-flex gap-2">
+                            @if (PuedeMostrarBotonSimular(fase))
+                            {
+                                <button class="btn btn-sm btn-outline-warning"
+                                        disabled="@_fasesSimulando.Contains(fase)"
+                                        @onclick="@(() => SimularFase(fase))">
+                                    @if (_fasesSimulando.Contains(fase))
+                                    {
+                                        <span class="spinner-border spinner-border-sm me-1" role="status"></span>
+                                        <span>Simulando...</span>
+                                    }
+                                    else
+                                    {
+                                        <span>Simular @fase</span>
+                                    }
+                                </button>
+                            }
+
+                            @if (PuedeMostrarBotonSiguiente(fase))
+                            {
+                                <button class="btn btn-sm btn-outline-primary"
+                                        disabled="@_fasesGenerando.Contains(fase)"
+                                        @onclick="@(() => GenerarSiguiente(fase))">
+                                    @if (_fasesGenerando.Contains(fase))
+                                    {
+                                        <span class="spinner-border spinner-border-sm me-1" role="status"></span>
+                                        <span>Generando...</span>
+                                    }
+                                    else
+                                    {
+                                        <span>Generar @NombreSiguiente(fase)</span>
+                                    }
+                                </button>
+                            }
+                        </div>
+                    </div>
+                }
+            }
+        }
+    </div>
+}
+
+@code {
+    private FixtureDTO? fixture;
+    private bool paginaCargada;
+    private string mensajeError = string.Empty;
+    private string mensajeExito = string.Empty;
+    private int formSemilla = 42;
+    private bool _generandoDieciseisavos = false;
+    private HashSet<FasePartido> _fasesSimulando = new();
+    private HashSet<FasePartido> _fasesGenerando = new();
+
+    private static readonly FasePartido[] fasesOrden =
+    {
+        FasePartido.DieciseisavosDeFinal,
+        FasePartido.OctavosDeFinal,
+        FasePartido.CuartosDeFinal,
+        FasePartido.Semifinal,
+        FasePartido.TercerPuesto,
+        FasePartido.Final
+    };
+
+    protected override void OnInitialized()
+    {
+        if (!ServicioSesion.EstaLogueado)
+        {
+            Navigation.NavigateTo("/login", replace: true);
+            return;
+        }
+        bool esAdmin = ServicioRoles.EsAdmin();
+        bool esEditor = ServicioRoles.EsEditor();
+        if (!esAdmin && !esEditor)
+        {
+            Navigation.NavigateTo("/", replace: true);
+            return;
+        }
+        CargarFixture();
+        paginaCargada = true;
+    }
+
+    private void CargarFixture()
+    {
+        try { fixture = FixtureServicio.ObtenerFixture(); }
+        catch { fixture = null; }
+    }
+
+    private async Task GenerarDieciseisavos()
+    {
+        _generandoDieciseisavos = true;
+        StateHasChanged();
+        await Task.Yield();
+        try
+        {
+            string email = ServicioSesion.ObtenerUsuarioActual().CorreoElectronico;
+            ConfiguracionTorneo config = ConfiguracionTorneo.PorDefecto()
+                with { SemillaCrucesFase = formSemilla };
+            CrucesServicio.GenerarDieciseisavos(config, email);
+            mensajeExito = "Dieciseisavos generados correctamente.";
+            CargarFixture();
+        }
+        catch (Exception ex)
+        {
+            mensajeError = ex.Message;
+        }
+        finally
+        {
+            _generandoDieciseisavos = false;
+        }
+    }
+
+    private async Task GenerarSiguiente(FasePartido faseActual)
+    {
+        _fasesGenerando.Add(faseActual);
+        StateHasChanged();
+        await Task.Yield();
+        try
+        {
+            string email = ServicioSesion.ObtenerUsuarioActual().CorreoElectronico;
+            switch (faseActual)
+            {
+                case FasePartido.DieciseisavosDeFinal:
+                    CrucesServicio.GenerarOctavos(email);
+                    break;
+                case FasePartido.OctavosDeFinal:
+                    CrucesServicio.GenerarCuartos(email);
+                    break;
+                case FasePartido.CuartosDeFinal:
+                    CrucesServicio.GenerarSemifinales(email);
+                    break;
+                case FasePartido.Semifinal:
+                    CrucesServicio.GenerarTercerPuestoYFinal(email);
+                    break;
+            }
+            mensajeExito = $"{NombreSiguiente(faseActual)} generados.";
+            CargarFixture();
+        }
+        catch (Exception ex)
+        {
+            mensajeError = ex.Message;
+        }
+        finally
+        {
+            _fasesGenerando.Remove(faseActual);
+        }
+    }
+
+    private async Task SimularFase(FasePartido fase)
+    {
+        _fasesSimulando.Add(fase);
+        StateHasChanged();
+        await Task.Yield();
+        try
+        {
+            ConfiguracionTorneo config = ConfiguracionTorneo.PorDefecto();
+            string email = ServicioSesion.ObtenerUsuarioActual().CorreoElectronico;
+            fixture = CrucesServicio.SimularFase(fase, config, email);
+            mensajeExito = $"{fase} simulada.";
+        }
+        catch (Exception ex)
+        {
+            mensajeError = ex.Message;
+        }
+        finally
+        {
+            _fasesSimulando.Remove(fase);
+        }
+    }
+
+    private bool PuedeMostrarBotonSimular(FasePartido fase) =>
+        fixture!.PartidosEliminatorias.Any(p => p.Fase == fase && !p.EstaJugado);
+
+    private bool PuedeMostrarBotonSiguiente(FasePartido fase)
+    {
+        if (fase is FasePartido.Final or FasePartido.TercerPuesto)
+            return false;
+        bool faseCompleta = fixture!.PartidosEliminatorias
+            .Where(p => p.Fase == fase)
+            .All(p => p.EstaJugado);
+        FasePartido siguiente = SiguienteFase(fase);
+        bool siguienteExiste = fixture!.PartidosEliminatorias.Any(p => p.Fase == siguiente);
+        return faseCompleta && !siguienteExiste;
+    }
+
+    private static string NombreSiguiente(FasePartido fase) =>
+        SiguienteFase(fase).ToString();
+
+    private static FasePartido SiguienteFase(FasePartido fase) => fase switch
+    {
+        FasePartido.DieciseisavosDeFinal => FasePartido.OctavosDeFinal,
+        FasePartido.OctavosDeFinal       => FasePartido.CuartosDeFinal,
+        FasePartido.CuartosDeFinal       => FasePartido.Semifinal,
+        FasePartido.Semifinal            => FasePartido.Final,
+        _                                => FasePartido.Final
+    };
+
+    private bool EsGanador(PartidoDTO p, bool esLocal)
+    {
+        if (!p.EstaJugado) return false;
+        if (p.GolesLocal != p.GolesVisitante)
+            return esLocal
+                ? p.GolesLocal > p.GolesVisitante
+                : p.GolesVisitante > p.GolesLocal;
+    
+        if (p.GolesPenalesLocal.HasValue && p.GolesPenalesVisitante.HasValue)
+            return esLocal
+                ? p.GolesPenalesLocal > p.GolesPenalesVisitante
+                : p.GolesPenalesVisitante > p.GolesPenalesLocal;
+        return false;
+    }
+
+    private bool TienePermiso(string roleName) => ServicioRoles.TienePermiso(roleName);
+}

@@ -1,0 +1,69 @@
+﻿@page "/"
+@page "/home"
+@rendermode InteractiveServer
+@using Sistema.Interfaces
+@using Dominio
+@using Sistema.DTOs
+@inject IServicioSesion ServicioSesion
+@inject NavigationManager Navigation
+
+<PageTitle>Home - World Cup Planner</PageTitle>
+
+@if (usuario != null)
+{
+    <div class="container mt-5">
+        <div class="row">
+            <div class="col-md-12">
+                <div class="alert alert-success" role="alert">
+                    <h4 class="alert-heading">¡Bienvenido, @usuario.Nombre @usuario.Apellido!</h4>
+                    <p class="mb-0">Correo: @usuario.CorreoElectronico</p>
+                </div>
+            </div>
+        </div>
+
+        <div class="row mt-4">
+            <div class="col-md-12">
+                <div class="card">
+                    <div class="card-body">
+                        <h5 class="card-title">Información de Sesión</h5>
+                        <ul class="list-group list-group-flush">
+                            <li class="list-group-item"><strong>Nombre:</strong> @usuario.Nombre</li>
+                            <li class="list-group-item"><strong>Apellido:</strong> @usuario.Apellido</li>
+                            <li class="list-group-item"><strong>Correo:</strong> @usuario.CorreoElectronico</li>
+                            <li class="list-group-item"><strong>Roles:</strong> @string.Join(", ", usuario.Roles)</li>
+                        </ul>
+                    </div>
+                </div>
+            </div>
+        </div>
+        <div class="row">
+            <div class="col-md-12">
+                <div class="alert alert-info" role="alert">
+                    <p class="mb-0">Para cambiar tus datos personales, hacé clic en tu nombre y apellido, ubicado en la parte superior izquierda de la pantalla.</p>
+                </div>
+            </div>
+        </div>
+    </div>
+}
+
+@code {
+    private UsuarioDTO? usuario;
+
+    protected override void OnInitialized()
+    {
+        try
+        {
+            usuario = UsuarioDTO.convertirAUsuarioDTO(ServicioSesion.ObtenerUsuarioActual());
+        }
+        catch
+        {
+            Navigation.NavigateTo("/login");
+        }
+    }
+
+    private void Logout()
+    {
+        ServicioSesion.CerrarSesion();
+        Navigation.NavigateTo("/login");
+    }
+}

@@ -1,0 +1,125 @@
+@page "/notificaciones"
+@rendermode InteractiveServer
+@inject NotificacionServicio NotificacionServicio
+@inject IServicioSesion ServicioSesion
+@inject NavigationManager Navigation
+@using Sistema
+@using Sistema.Interfaces
+@using Dominio
+
+<PageTitle>Notificaciones</PageTitle>
+
+@if (!paginaCargada)
+{
+    <div class="d-flex justify-content-center mt-5">
+        <div class="spinner-border" role="status"></div>
+    </div>
+}
+else
+{
+    <div class="container mt-4">
+        <div class="d-flex justify-content-between align-items-center mb-3">
+            <h3>Notificaciones</h3>
+            <div class="form-check form-switch">
+                <input class="form-check-input" type="checkbox" id="mostrarLeidas" @bind="mostrarLeidas" />
+                <label class="form-check-label" for="mostrarLeidas">Mostrar leídas</label>
+            </div>
+        </div>
+
+        @if (!string.IsNullOrEmpty(mensajeExito))
+        {
+            <div class="alert alert-success alert-dismissible">
+                @mensajeExito
+                <button type="button" class="btn-close" @onclick="@(() => mensajeExito = string.Empty)"></button>
+            </div>
+        }
+
+        @if (!string.IsNullOrEmpty(mensajeError))
+        {
+            <div class="alert alert-danger alert-dismissible">
+                @mensajeError
+                <button type="button" class="btn-close" @onclick="@(() => mensajeError = string.Empty)"></button>
+            </div>
+        }
+
+        @if (!NotificacionesMostradas.Any())
+        {
+            <div class="alert alert-info">No hay notificaciones para mostrar.</div>
+        }
+        else
+        {
+            <div class="list-group">
+                @foreach (Notificacion notificacion in NotificacionesMostradas)
+                {
+                    <div class="list-group-item @(notificacion.Leida ? "list-group-item-light" : "list-group-item-info")">
+                        <div class="d-flex justify-content-between align-items-start">
+                            <div>
+                                <p class="mb-1">@notificacion.Mensaje</p>
+                                <small class="text-muted">@notificacion.Timestamp.ToLocalTime().ToString("dd/MM/yyyy HH:mm:ss")</small>
+                            </div>
+                            @if (!notificacion.Leida)
+                            {
+                                <button class="btn btn-sm btn-outline-secondary ms-2"
+                                        @onclick="@(() => MarcarComoLeida(notificacion.Id))">
+                                    Marcar como leída
+                                </button>
+                            }
+                            else
+                            {
+                                <span class="badge bg-secondary ms-2">Leída</span>
+                            }
+                        </div>
+                    </div>
+                }
+            </div>
+        }
+    </div>
+}
+
+@code {
+    private List<Notificacion> notificaciones = new();
+    private bool mostrarLeidas;
+    private bool paginaCargada;
+    private string mensajeExito = string.Empty;
+    private string mensajeError = string.Empty;
+
+    private IEnumerable<Notificacion> NotificacionesMostradas =>
+        mostrarLeidas ? notificaciones : notificaciones.Where(n => !n.Leida);
+
+    protected override void OnInitialized()
+    {
+        if (!ServicioSesion.EstaLogueado)
+        {
+            Navigation.NavigateTo("/login", replace: true);
+            return;
+        }
+        bool esPeriodista = ServicioSesion.ObtenerUsuarioActual()
+            .Roles.Contains(RolDeUsuario.Periodista);
+        if (!esPeriodista)
+        {
+            Navigation.NavigateTo("/", replace: true);
+            return;
+        }
+        CargarNotificaciones();
+        paginaCargada = true;
+    }
+
+    private void CargarNotificaciones()
+    {
+        notificaciones = NotificacionServicio.ObtenerTodas();
+    }
+
+    private void MarcarComoLeida(int id)
+    {
+        try
+        {
+            NotificacionServicio.MarcarComoLeida(id);
+            mensajeExito = "Notificación marcada como leída.";
+            CargarNotificaciones();
+        }
+        catch (Exception ex)
+        {
+            mensajeError = ex.Message;
+        }
+    }
+}
