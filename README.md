@@ -4,7 +4,7 @@ Aplicación web para gestionar la fase de grupos y los cruces eliminatorios del
 Mundial de Fútbol 2026 (48 equipos, 12 grupos de 4). Permite administrar usuarios,
 equipos, estadios y partidos; generar el fixture de la fase de grupos con sorteos
 deterministas; simular resultados con motores de simulación intercambiables;
-recalcular el ranking de los equipos tras cada partido (fórmula ELO); notificar a
+recalcular el ranking de los equipos tras cada partido; notificar a
 los periodistas cuando se carga un resultado; exportar el fixture y el log de
 auditoría en CSV/XLSX; y mantener trazabilidad completa de las acciones del sistema.
 
@@ -222,7 +222,7 @@ Este proyecto utiliza Claude Code y con el archivo de instrucciones
 - `documentacion` — generación de los reportes de justificación de diseño por feature, en `reportes/`.
 
 **Herramienta:** Claude Code (Anthropic, modelo Claude Sonnet 4.6) — usada para
-generación de código guiada por TDD, revisión de diseño según GRASP/SOLID,
+generación parcial del código guiado por TDD, revisión de diseño según GRASP/SOLID,
 generación de migraciones EF Core y documentación del proyecto. Todo el código
 y la documentación generados con asistencia de IA fueron revisados y verificados
 por el equipo antes de integrarlos.
@@ -231,8 +231,4 @@ por el equipo antes de integrarlos.
 
 ## Integrantes
 
-| Nombre | Número de estudiante |
-|--------|---------------------|
-| Luca Bafico | 297560 |
-| Nahuel Paroldo | 345530 |
-| Mateo Poppolo | 315354 |
+Luca Bafico, Nahuel Paroldo y Mateo Poppolo
