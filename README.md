@@ -210,8 +210,7 @@ Documentados en detalle en `.claude/skills/grasp-solid/SKILL.md` y en
 
 ## Uso de IA Generativa
 
-Este proyecto utiliza Claude Code y con el archivo de instrucciones
-[`CLAUDE.md`](CLAUDE.md) (raíz del repositorio).
+Este proyecto utilizó Claude Code en su desarrollo para el análisis de diseÑo, borrador de documentación, generación de tests y algunos CRUDs del proyecto respetando TDD.
 
 **Skills del repositorio (`.claude/skills/`):**
 
@@ -221,11 +220,7 @@ Este proyecto utiliza Claude Code y con el archivo de instrucciones
 - `create-readme` — generación de este mismo README.md.
 - `documentacion` — generación de los reportes de justificación de diseño por feature, en `reportes/`.
 
-**Herramienta:** Claude Code (Anthropic, modelo Claude Sonnet 4.6) — usada para
-generación parcial del código guiado por TDD, revisión de diseño según GRASP/SOLID,
-generación de migraciones EF Core y documentación del proyecto. Todo el código
-y la documentación generados con asistencia de IA fueron revisados y verificados
-por el equipo antes de integrarlos.
+Todo el código generado con asistencia de IA fue revisado y verificado por el equipo antes de integrarlo.
 
 ---
 
